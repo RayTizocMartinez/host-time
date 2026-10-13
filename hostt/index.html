@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111111">
+<title>Stopwatch</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<style>
+  html, body { margin: 0; height: 100%; background: #111; color: #f5f5f5; font-family: system-ui, sans-serif; }
+  body {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 40px; padding: 20px; box-sizing: border-box;
+  }
+  #time {
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: min(16vw, 96px);
+    color: #f5f5f5;
+  }
+  #time.alert { color: #ff3b30; }
+  .buttons { display: flex; gap: 20px; }
+  button {
+    font-size: 30px; min-width: 150px; padding: 28px 36px;
+    border: none; border-radius: 16px; color: #fff; cursor: pointer;
+    background: #2a2a2a;
+  }
+  button:active { transform: scale(0.96); }
+  #start { background: #2e7d32; }
+  #pause { background: #b26a00; }
+  #new   { background: #1565c0; }
+  #log-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%; max-width: 420px; }
+  #count { font-size: 22px; color: #bbb; }
+  #log {
+    list-style: none; margin: 0; padding: 0; width: 100%;
+    max-height: 30vh; overflow-y: auto;
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 22px;
+    font-variant-numeric: tabular-nums;
+  }
+  #log li { display: flex; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid #2a2a2a; }
+  #clear {
+    font-size: 20px; min-width: 150px; padding: 16px 28px;
+    background: #6d1f1f;
+  }
+</style>
+</head>
+<body>
+  <div id="time">00:00:00.00</div>
+  <div class="buttons">
+    <button id="start">Start</button>
+    <button id="pause">Pause</button>
+    <button id="new">New</button>
+  </div>
+  <div id="log-wrap">
+    <div id="count">Spots: 0</div>
+    <ul id="log"></ul>
+    <button id="clear">Clear</button>
+  </div>
+
+<script>
+  const display = document.getElementById('time');
+
+  let elapsed = 0;     // ms banked from previous runs
+  let startedAt = null; // performance.now() when the current run began, or null if paused
+  let frame = null;
+
+  function now() {
+    return startedAt === null ? elapsed : elapsed + (performance.now() - startedAt);
+  }
+
+  function format(ms) {
+    const pad = n => String(n).padStart(2, '0');
+    const cs = Math.floor(ms / 10) % 100;
+    const s  = Math.floor(ms / 1000) % 60;
+    const m  = Math.floor(ms / 60000) % 60;
+    const h  = Math.floor(ms / 3600000);
+    return `${pad(h)}:${pad(m)}:${pad(s)}.${pad(cs)}`;
+  }
+
+  function render() {
+    const ms = now();
+    display.textContent = format(ms);
+    // Red during minutes 4, 9, 14 (and every 5 minutes after), white otherwise.
+    const minute = Math.floor(ms / 60000);
+    display.classList.toggle('alert', minute % 5 === 4);
+    if (startedAt !== null) frame = requestAnimationFrame(render);
+  }
+
+  function start() {
+    if (startedAt !== null) return;
+    startedAt = performance.now();
+    render();
+  }
+
+  function pause() {
+    if (startedAt === null) return;
+    elapsed = now();
+    startedAt = null;
+    cancelAnimationFrame(frame);
+    render();
+  }
+
+  const spots = [];
+  const logEl = document.getElementById('log');
+  const countEl = document.getElementById('count');
+
+  function renderLog() {
+    logEl.replaceChildren(...spots.map((t, i) => {
+      const li = document.createElement('li');
+      const n = document.createElement('span');
+      n.textContent = `#${i + 1}`;
+      const v = document.createElement('span');
+      v.textContent = t;
+      li.append(n, v);
+      return li;
+    }));
+    countEl.textContent = `Spots: ${spots.length}`;
+  }
+
+  function newRun() {
+    const total = now();
+    if (total > 0) {
+      spots.push(format(total));
+      renderLog();
+    }
+    cancelAnimationFrame(frame);
+    elapsed = 0;
+    startedAt = null;
+    start();
+  }
+
+  function clearLog() {
+    spots.length = 0;
+    renderLog();
+  }
+
+  document.getElementById('start').addEventListener('click', start);
+  document.getElementById('pause').addEventListener('click', pause);
+  document.getElementById('new').addEventListener('click', newRun);
+  document.getElementById('clear').addEventListener('click', clearLog);
+
+  renderLog();
+
+  render();
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+  }
+</script>
+</body>
+</html>
